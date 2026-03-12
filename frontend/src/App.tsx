@@ -96,18 +96,32 @@ function Marker({ event, onClick }: { event: HistoricalEvent; onClick: () => voi
         <div 
           className="marker-label" 
           style={{ 
-            color: 'white', 
-            background: 'rgba(0,0,0,0.7)', 
-            padding: '4px 8px', 
+            color: 'rgba(255,255,255,0.9)', 
+            background: 'rgba(0,0,0,0.5)', 
+            padding: '2px 6px', 
             borderRadius: '4px', 
             cursor: 'pointer', 
             pointerEvents: 'auto',
-            fontSize: '12px',
+            fontSize: '10px',
             whiteSpace: 'nowrap',
             transform: 'translate3d(-50%, -150%, 0)',
-            border: '1px solid rgba(255,255,255,0.2)'
+            border: 'none',
+            backdropFilter: 'blur(2px)',
+            transition: 'all 0.2s ease',
           }} 
           onClick={(e) => { e.stopPropagation(); onClick(); }}
+          onPointerOver={(e) => {
+            e.currentTarget.style.background = 'rgba(0,0,0,0.8)';
+            e.currentTarget.style.color = '#fff';
+            e.currentTarget.style.transform = 'translate3d(-50%, -150%, 0) scale(1.1)';
+            e.currentTarget.style.zIndex = '100';
+          }}
+          onPointerOut={(e) => {
+            e.currentTarget.style.background = 'rgba(0,0,0,0.5)';
+            e.currentTarget.style.color = 'rgba(255,255,255,0.9)';
+            e.currentTarget.style.transform = 'translate3d(-50%, -150%, 0) scale(1)';
+            e.currentTarget.style.zIndex = '1';
+          }}
         >
           {event.title}
         </div>
