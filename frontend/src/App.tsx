@@ -1,11 +1,53 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Stars, OrbitControls, useTexture } from "@react-three/drei";
-import { useRef, Suspense } from "react";
+import { Stars, OrbitControls, useTexture, Html } from "@react-three/drei";
+import { useRef, Suspense, useState } from "react";
 import * as THREE from "three";
 import "./App.css";
+import { mockEvents, HistoricalEvent } from "./data/mockEvents";
 
-function Earth() {
-  const earthRef = useRef<THREE.Mesh>(null);
+function latLongToVector3(lat: number, lon: number, radius: number): THREE.Vector3 {
+  const phi = (90 - lat) * (Math.PI / 180);
+  const theta = (lon + 180) * (Math.PI / 180);
+
+  const x = -(radius * Math.sin(phi) * Math.cos(theta));
+  const z = (radius * Math.sin(phi) * Math.sin(theta));
+  const y = (radius * Math.cos(phi));
+
+  return new THREE.Vector3(x, y, z);
+}
+
+function Marker({ event, onClick }: { event: HistoricalEvent; onClick: () => void }) {
+  const position = latLongToVector3(event.lat, event.lng, 2);
+  return (
+    <mesh position={position} onClick={(e) => { e.stopPropagation(); onClick(); }}>
+      <sphereGeometry args={[0.03, 16, 16]} />
+      <meshBasicMaterial color="#ff4081" />
+      <Html distanceFactor={15}>
+        <div 
+          className="marker-label" 
+          style={{ 
+            color: 'white', 
+            background: 'rgba(0,0,0,0.7)', 
+            padding: '4px 8px', 
+            borderRadius: '4px', 
+            cursor: 'pointer', 
+            pointerEvents: 'auto',
+            fontSize: '12px',
+            whiteSpace: 'nowrap',
+            transform: 'translate3d(-50%, -150%, 0)',
+            border: '1px solid rgba(255,255,255,0.2)'
+          }} 
+          onClick={(e) => { e.stopPropagation(); onClick(); }}
+        >
+          {event.title}
+        </div>
+      </Html>
+    </mesh>
+  );
+}
+
+function Earth({ onSelectEvent }: { onSelectEvent: (e: HistoricalEvent) => void }) {
+  const earthRef = useRef<THREE.Group>(null);
   
   // 加载真实的高清地球纹理贴图
   const [colorMap] = useTexture(['https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg']);
@@ -17,18 +59,25 @@ function Earth() {
   });
 
   return (
-    <mesh ref={earthRef} position={[0, 0, 0]}>
-      <sphereGeometry args={[2, 64, 64]} />
-      <meshStandardMaterial
-        map={colorMap}
-        roughness={0.6}
-        metalness={0.1}
-      />
-    </mesh>
+    <group ref={earthRef}>
+      <mesh position={[0, 0, 0]}>
+        <sphereGeometry args={[2, 64, 64]} />
+        <meshStandardMaterial
+          map={colorMap}
+          roughness={0.6}
+          metalness={0.1}
+        />
+      </mesh>
+      {mockEvents.map(event => (
+        <Marker key={event.id} event={event} onClick={() => onSelectEvent(event)} />
+      ))}
+    </group>
   );
 }
 
 function App() {
+  const [selectedEvent, setSelectedEvent] = useState<HistoricalEvent | null>(null);
+
   const handleStartExplore = () => {
     alert("欢迎来到时空纪元！历史数据正在加载中，准备开启穿越之旅...");
   };
@@ -50,7 +99,7 @@ function App() {
             speed={1}
           />
           <Suspense fallback={null}>
-            <Earth />
+            <Earth onSelectEvent={setSelectedEvent} />
           </Suspense>
           <OrbitControls enableZoom={true} enablePan={false} />
         </Canvas>
@@ -60,16 +109,27 @@ function App() {
       <div className="ui-overlay">
         {/* Sidebar Info Panel */}
         <div className="sidebar glass-panel">
-          <h2>时空纪元 (TimeMap)</h2>
-          <p>以前所未有的“上帝视角”，探索人类历史的共时性发展。</p>
-          <ul className="info-list">
-            <li>文明起源</li>
-            <li>轴心时代</li>
-            <li>大航海时代</li>
-            <li>工业革命</li>
-            <li>信息纪元</li>
-          </ul>
-          <button className="glass-btn" onClick={handleStartExplore}>开始探索</button>
+          {selectedEvent ? (
+            <>
+              <h2>{selectedEvent.title}</h2>
+              <div style={{color: '#61dafb', marginBottom: '10px', fontSize: '18px', fontWeight: 'bold'}}>
+                {selectedEvent.year > 0 ? `公元 ${selectedEvent.year} 年` : `公元前 ${Math.abs(selectedEvent.year)} 年`}
+              </div>
+              <p>{selectedEvent.description}</p>
+              <button className="glass-btn" onClick={() => setSelectedEvent(null)}>返回主视图</button>
+            </>
+          ) : (
+            <>
+              <h2>时空纪元 (TimeMap)</h2>
+              <p>以前所未有的“上帝视角”，探索人类历史的共时性发展。</p>
+              <ul className="info-list">
+                {mockEvents.map(ev => (
+                  <li key={ev.id} onClick={() => setSelectedEvent(ev)}>{ev.title}</li>
+                ))}
+              </ul>
+              <button className="glass-btn" onClick={handleStartExplore}>开始探索</button>
+            </>
+          )}
         </div>
 
         {/* Bottom Timeline */}
