@@ -1,6 +1,6 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Stars, OrbitControls, useTexture, Html } from "@react-three/drei";
-import { useRef, Suspense, useState } from "react";
+import { useRef, Suspense, useState, useMemo } from "react";
 import * as THREE from "three";
 import "./App.css";
 import { epochSlices } from "./data/mockEvents";
@@ -15,6 +15,75 @@ function latLongToVector3(lat: number, lon: number, radius: number): THREE.Vecto
   const y = (radius * Math.cos(phi));
 
   return new THREE.Vector3(x, y, z);
+}
+
+function ButterflyArc({ startPos, endPos }: { startPos: THREE.Vector3; endPos: THREE.Vector3 }) {
+  const points = useMemo(() => {
+    const midPoint = startPos.clone().lerp(endPos, 0.5);
+    const distance = startPos.distanceTo(endPos);
+    const controlPoint = midPoint.clone().normalize().multiplyScalar(2 + distance * 0.4);
+    const curve = new THREE.QuadraticBezierCurve3(startPos, controlPoint, endPos);
+    return curve.getPoints(50);
+  }, [startPos, endPos]);
+
+  const curve = useMemo(() => new THREE.CatmullRomCurve3(points), [points]);
+  const particleRef = useRef<THREE.Mesh>(null);
+
+  useFrame(({ clock }) => {
+    const t = (clock.getElapsedTime() * 0.6) % 1;
+    if (particleRef.current) {
+      const pos = curve.getPointAt(t);
+      particleRef.current.position.copy(pos);
+    }
+  });
+
+  return (
+    <group>
+      <line>
+        <bufferGeometry attach="geometry" {...new THREE.BufferGeometry().setFromPoints(points)} />
+        <lineBasicMaterial attach="material" color="#00ffff" transparent opacity={0.4} />
+      </line>
+      <mesh ref={particleRef}>
+        <sphereGeometry args={[0.04, 16, 16]} />
+        <meshBasicMaterial color="#ffffff" />
+        <pointLight color="#00ffff" intensity={2} distance={1} />
+      </mesh>
+    </group>
+  );
+}
+
+function ButterflyLines({ selectedEvent }: { selectedEvent: HistoricalEvent | null }) {
+  const arcs = useMemo(() => {
+    if (!selectedEvent || !selectedEvent.relatedEventIds || selectedEvent.relatedEventIds.length === 0) {
+      return [];
+    }
+    const startPos = latLongToVector3(selectedEvent.lat, selectedEvent.lng, 2);
+    const result: { start: THREE.Vector3; end: THREE.Vector3; id: string }[] = [];
+    
+    selectedEvent.relatedEventIds.forEach(id => {
+      let targetEvent: HistoricalEvent | null = null;
+      for (const slice of epochSlices) {
+        const found = slice.events.find(e => e.id === id);
+        if (found) {
+          targetEvent = found;
+          break;
+        }
+      }
+      if (targetEvent) {
+        const endPos = latLongToVector3(targetEvent.lat, targetEvent.lng, 2);
+        result.push({ start: startPos, end: endPos, id });
+      }
+    });
+    return result;
+  }, [selectedEvent]);
+
+  return (
+    <group>
+      {arcs.map(arc => (
+        <ButterflyArc key={arc.id} startPos={arc.start} endPos={arc.end} />
+      ))}
+    </group>
+  );
 }
 
 function Marker({ event, onClick }: { event: HistoricalEvent; onClick: () => void }) {
@@ -73,6 +142,7 @@ function Earth({ events, onSelectEvent, selectedEvent }: { events: HistoricalEve
       {events.map(event => (
         <Marker key={event.id} event={event} onClick={() => onSelectEvent(event)} />
       ))}
+      <ButterflyLines selectedEvent={selectedEvent} />
     </group>
   );
 }
