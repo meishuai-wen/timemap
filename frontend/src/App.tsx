@@ -1,14 +1,18 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Stars, OrbitControls } from "@react-three/drei";
-import { useRef } from "react";
+import { Stars, OrbitControls, useTexture } from "@react-three/drei";
+import { useRef, Suspense } from "react";
 import * as THREE from "three";
 import "./App.css";
 
 function Earth() {
   const earthRef = useRef<THREE.Mesh>(null);
+  
+  // 加载真实的高清地球纹理贴图
+  const [colorMap] = useTexture(['https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg']);
+
   useFrame(() => {
     if (earthRef.current) {
-      earthRef.current.rotation.y += 0.001;
+      earthRef.current.rotation.y += 0.001; // 地球自转
     }
   });
 
@@ -16,23 +20,26 @@ function Earth() {
     <mesh ref={earthRef} position={[0, 0, 0]}>
       <sphereGeometry args={[2, 64, 64]} />
       <meshStandardMaterial
-        color="#2a4b7c"
+        map={colorMap}
         roughness={0.6}
-        metalness={0.2}
-        wireframe={true}
+        metalness={0.1}
       />
     </mesh>
   );
 }
 
 function App() {
+  const handleStartExplore = () => {
+    alert("欢迎来到时空纪元！历史数据正在加载中，准备开启穿越之旅...");
+  };
+
   return (
     <div className="app-container">
       {/* 3D Background */}
       <div className="canvas-container">
         <Canvas camera={{ position: [0, 0, 5], fov: 60 }}>
-          <ambientLight intensity={0.5} />
-          <pointLight position={[10, 10, 10]} intensity={1} />
+          <ambientLight intensity={1.5} />
+          <pointLight position={[10, 10, 10]} intensity={2} />
           <Stars
             radius={100}
             depth={50}
@@ -42,7 +49,9 @@ function App() {
             fade
             speed={1}
           />
-          <Earth />
+          <Suspense fallback={null}>
+            <Earth />
+          </Suspense>
           <OrbitControls enableZoom={true} enablePan={false} />
         </Canvas>
       </div>
@@ -60,7 +69,7 @@ function App() {
             <li>工业革命</li>
             <li>信息纪元</li>
           </ul>
-          <button className="glass-btn">开始探索</button>
+          <button className="glass-btn" onClick={handleStartExplore}>开始探索</button>
         </div>
 
         {/* Bottom Timeline */}
@@ -72,9 +81,9 @@ function App() {
             <div className="timeline-marker" style={{ left: "80%" }}></div>
           </div>
           <div className="timeline-labels">
-            <span>过去 (Past)</span>
-            <span>现在 (Present)</span>
-            <span>未来 (Future)</span>
+            <span>过去 (PAST)</span>
+            <span>现在 (PRESENT)</span>
+            <span>未来 (FUTURE)</span>
           </div>
         </div>
       </div>
