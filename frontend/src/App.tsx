@@ -3,8 +3,8 @@ import { Stars, OrbitControls, useTexture, Html } from "@react-three/drei";
 import { useRef, Suspense, useState } from "react";
 import * as THREE from "three";
 import "./App.css";
+import { epochSlices } from "./data/mockEvents";
 import type { HistoricalEvent } from "./data/mockEvents";
-import { mockEvents } from "./data/mockEvents";
 
 function latLongToVector3(lat: number, lon: number, radius: number): THREE.Vector3 {
   const phi = (90 - lat) * (Math.PI / 180);
@@ -47,15 +47,13 @@ function Marker({ event, onClick }: { event: HistoricalEvent; onClick: () => voi
   );
 }
 
-function Earth({ onSelectEvent }: { onSelectEvent: (e: HistoricalEvent) => void }) {
+function Earth({ events, onSelectEvent }: { events: HistoricalEvent[], onSelectEvent: (e: HistoricalEvent) => void }) {
   const earthRef = useRef<THREE.Group>(null);
-  
-  // 加载真实的高清地球纹理贴图
   const [colorMap] = useTexture(['https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg']);
 
   useFrame(() => {
     if (earthRef.current) {
-      earthRef.current.rotation.y += 0.001; // 地球自转
+      earthRef.current.rotation.y += 0.001;
     }
   });
 
@@ -63,13 +61,9 @@ function Earth({ onSelectEvent }: { onSelectEvent: (e: HistoricalEvent) => void 
     <group ref={earthRef}>
       <mesh position={[0, 0, 0]}>
         <sphereGeometry args={[2, 64, 64]} />
-        <meshStandardMaterial
-          map={colorMap}
-          roughness={0.6}
-          metalness={0.1}
-        />
+        <meshStandardMaterial map={colorMap} roughness={0.6} metalness={0.1} />
       </mesh>
-      {mockEvents.map(event => (
+      {events.map(event => (
         <Marker key={event.id} event={event} onClick={() => onSelectEvent(event)} />
       ))}
     </group>
@@ -77,74 +71,97 @@ function Earth({ onSelectEvent }: { onSelectEvent: (e: HistoricalEvent) => void 
 }
 
 function App() {
+  const [selectedYear, setSelectedYear] = useState<number>(epochSlices[0].year);
   const [selectedEvent, setSelectedEvent] = useState<HistoricalEvent | null>(null);
+  const [flash, setFlash] = useState(false);
 
-  const handleStartExplore = () => {
-    alert("欢迎来到时空纪元！历史数据正在加载中，准备开启穿越之旅...");
+  const currentSlice = epochSlices.find(s => s.year === selectedYear) || epochSlices[0];
+
+  const handleYearClick = (year: number) => {
+    setSelectedYear(year);
+    setSelectedEvent(null);
+    setFlash(true);
+    setTimeout(() => setFlash(false), 500);
   };
 
   return (
     <div className="app-container">
-      {/* 3D Background */}
+      {flash && <div className="flash-overlay" style={{
+        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(255, 255, 255, 0.3)', pointerEvents: 'none',
+        zIndex: 100, transition: 'background-color 0.5s', opacity: flash ? 1 : 0
+      }} />}
+      
       <div className="canvas-container">
         <Canvas camera={{ position: [0, 0, 5], fov: 60 }}>
           <ambientLight intensity={1.5} />
           <pointLight position={[10, 10, 10]} intensity={2} />
-          <Stars
-            radius={100}
-            depth={50}
-            count={5000}
-            factor={4}
-            saturation={0}
-            fade
-            speed={1}
-          />
+          <Stars radius={100} depth={50} count={flash ? 10000 : 5000} factor={4} saturation={0} fade speed={flash ? 3 : 1} />
           <Suspense fallback={null}>
-            <Earth onSelectEvent={setSelectedEvent} />
+            <Earth events={currentSlice.events} onSelectEvent={setSelectedEvent} />
           </Suspense>
           <OrbitControls enableZoom={true} enablePan={false} />
         </Canvas>
       </div>
 
-      {/* Glassmorphism UI Overlay */}
       <div className="ui-overlay">
-        {/* Sidebar Info Panel */}
-        <div className="sidebar glass-panel">
-          {selectedEvent ? (
-            <>
-              <h2>{selectedEvent.title}</h2>
-              <div style={{color: '#61dafb', marginBottom: '10px', fontSize: '18px', fontWeight: 'bold'}}>
-                {selectedEvent.year > 0 ? `公元 ${selectedEvent.year} 年` : `公元前 ${Math.abs(selectedEvent.year)} 年`}
-              </div>
-              <p>{selectedEvent.description}</p>
-              <button className="glass-btn" onClick={() => setSelectedEvent(null)}>返回主视图</button>
-            </>
-          ) : (
-            <>
-              <h2>时空纪元 (TimeMap)</h2>
-              <p>以前所未有的“上帝视角”，探索人类历史的共时性发展。</p>
-              <ul className="info-list">
-                {mockEvents.map(ev => (
-                  <li key={ev.id} onClick={() => setSelectedEvent(ev)}>{ev.title}</li>
-                ))}
-              </ul>
-              <button className="glass-btn" onClick={handleStartExplore}>开始探索</button>
-            </>
+        <div className="sidebar glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div className="theme-summary">
+            <h2 style={{ margin: '0 0 10px 0', fontSize: '24px' }}>
+              {currentSlice.year > 0 ? `公元 ${currentSlice.year} 年` : `公元前 ${Math.abs(currentSlice.year)} 年`}
+            </h2>
+            <p style={{ fontStyle: 'italic', color: '#ffb300', margin: 0 }}>上帝视角：{currentSlice.themeSummary}</p>
+          </div>
+
+          <div className="events-list" style={{ flex: 1, overflowY: 'auto' }}>
+            <h3 style={{ borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '5px' }}>同时代事件</h3>
+            <ul className="info-list" style={{ listStyle: 'none', padding: 0 }}>
+              {currentSlice.events.map(ev => (
+                <li 
+                  key={ev.id} 
+                  onClick={() => setSelectedEvent(ev)}
+                  style={{ 
+                    cursor: 'pointer', 
+                    padding: '8px', 
+                    border: '1px solid rgba(255,255,255,0.1)', 
+                    borderRadius: '4px',
+                    marginBottom: '8px',
+                    backgroundColor: selectedEvent?.id === ev.id ? 'rgba(255,255,255,0.2)' : 'transparent'
+                  }}
+                >
+                  <div style={{ fontWeight: 'bold' }}>{ev.title}</div>
+                  <div style={{ fontSize: '12px', color: '#ccc' }}>{ev.region}</div>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {selectedEvent && (
+            <div className="event-details" style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '15px' }}>
+              <h3 style={{ margin: '0 0 10px 0', color: '#61dafb' }}>{selectedEvent.title}</h3>
+              <p style={{ fontSize: '14px', lineHeight: '1.5', margin: 0 }}>{selectedEvent.description}</p>
+            </div>
           )}
         </div>
 
-        {/* Bottom Timeline */}
         <div className="timeline-container glass-panel">
-          <div className="timeline-track">
-            <div className="timeline-progress"></div>
-            <div className="timeline-marker" style={{ left: "20%" }}></div>
-            <div className="timeline-marker" style={{ left: "50%" }}></div>
-            <div className="timeline-marker" style={{ left: "80%" }}></div>
-          </div>
-          <div className="timeline-labels">
-            <span>过去 (PAST)</span>
-            <span>现在 (PRESENT)</span>
-            <span>未来 (FUTURE)</span>
+          <div className="timeline-labels" style={{ display: 'flex', justifyContent: 'space-between', width: '100%', padding: '0 20px' }}>
+            {epochSlices.map((slice) => (
+              <div 
+                key={slice.year}
+                onClick={() => handleYearClick(slice.year)}
+                style={{
+                  cursor: 'pointer',
+                  padding: '5px 15px',
+                  borderRadius: '20px',
+                  backgroundColor: slice.year === selectedYear ? 'rgba(97, 218, 251, 0.3)' : 'transparent',
+                  border: slice.year === selectedYear ? '1px solid #61dafb' : '1px solid transparent',
+                  transition: 'all 0.3s'
+                }}
+              >
+                {slice.year > 0 ? `公元 ${slice.year}` : `公元前 ${Math.abs(slice.year)}`}
+              </div>
+            ))}
           </div>
         </div>
       </div>
