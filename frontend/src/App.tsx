@@ -8,17 +8,63 @@ import type { HistoricalEvent } from "./data/mockEvents";
 const MW = 10, MH = 5;
 function ltp(lat: number, lng: number) { return new THREE.Vector3((lng/180)*(MW/2),(lat/90)*(MH/2),0.01); }
 function ButterflyArc({s,e}:{s:THREE.Vector3;e:THREE.Vector3}) {
-  const pts = useMemo(()=>{const m=s.clone().lerp(e,0.5);return new THREE.QuadraticBezierCurve3(s,new THREE.Vector3(m.x,m.y,s.distanceTo(e)*0.3),e).getPoints(50);},[s,e]);
-  const c = useMemo(()=>new THREE.CatmullRomCurve3(pts),[pts]);
+  const geom = useMemo(()=>{
+    const dx = e.x - s.x; const dy = e.y - s.y; const dist = Math.sqrt(dx*dx + dy*dy);
+    const nx = -dy/dist; const ny = dx/dist; const m = s.clone().lerp(e,0.5);
+    const cp = new THREE.Vector3(m.x + nx*dist*0.2, m.y + ny*dist*0.2, 0.01);
+    const curve = new THREE.QuadraticBezierCurve3(s, cp, e);
+    const points = curve.getPoints(60);
+    const g = new THREE.BufferGeometry().setFromPoints(points);
+    const mat = new THREE.LineDashedMaterial({ color: 0x00ffff, transparent: true, opacity: 0.6, dashSize: 0.08, gapSize: 0.04 });
+    const line = new THREE.Line(g, mat);
+    line.computeLineDistances();
+    return { curve, line, mat };
+  },[s,e]);
   const r = useRef<THREE.Mesh>(null);
-  useFrame(({clock})=>{if(r.current)r.current.position.copy(c.getPointAt((clock.getElapsedTime()*0.6)%1));});
-  return(<group><line><bufferGeometry attach="geometry" {...new THREE.BufferGeometry().setFromPoints(pts)}/><lineBasicMaterial attach="material" color="#00ffff" transparent opacity={0.5}/></line><mesh ref={r}><sphereGeometry args={[0.04,16,16]}/><meshBasicMaterial color="#fff"/><pointLight color="#00ffff" intensity={2} distance={1}/></mesh></group>);
+  useFrame(({clock})=>{
+    if(r.current) r.current.position.copy(geom.curve.getPointAt((clock.getElapsedTime()*0.5)%1));
+    if(geom.mat) (geom.mat as any).dashOffset = -clock.getElapsedTime() * 0.2;
+  });
+  return(<group>
+    <primitive object={geom.line} />
+    <mesh ref={r} position={s}><sphereGeometry args={[0.03,16,16]}/><meshBasicMaterial color="#fff"/><pointLight color="#00ffff" intensity={2} distance={1}/></mesh>
+  </group>);
 }
 function BLines({sel}:{sel:HistoricalEvent|null}) {
   const arcs = useMemo(()=>{if(!sel?.relatedEventIds?.length)return[];const sp=ltp(sel.lat,sel.lng);const r:{s:THREE.Vector3;e:THREE.Vector3;id:string}[]=[];sel.relatedEventIds.forEach(id=>{for(const sl of daySlices){const f=sl.events.find(x=>x.id===id);if(f){r.push({s:sp,e:ltp(f.lat,f.lng),id});break;}}});return r;},[sel]);
   return(<group>{arcs.map(a=><ButterflyArc key={a.id} s={a.s} e={a.e}/>)}</group>);
 }
+function EmpiresLayer({year}:{year:number|undefined}) {
+  const polys = useMemo(()=>{
+    if(!year) return [];
+    const res = [];
+    if(year >= -221 && year <= -206) {
+      // Qin
+      const qinPts = [[100,20], [120,20], [120,40], [105,45], [95,35]].map(p=>ltp(p[1],p[0]));
+      const shape = new THREE.Shape();
+      shape.moveTo(qinPts[0].x, qinPts[0].y);
+      for(let i=1;i<qinPts.length;i++) shape.lineTo(qinPts[i].x, qinPts[i].y);
+      res.push({id:'qin', color:'#000000', shape});
+    }
+    if(year >= -27 && year <= 395) {
+      // Rome
+      const romePts = [[-10,30], [40,30], [40,45], [10,50], [-10,40]].map(p=>ltp(p[1],p[0]));
+      const shape = new THREE.Shape();
+      shape.moveTo(romePts[0].x, romePts[0].y);
+      for(let i=1;i<romePts.length;i++) shape.lineTo(romePts[i].x, romePts[i].y);
+      res.push({id:'rome', color:'#ff0000', shape});
+    }
+    return res;
+  },[year]);
+  return(<group>{polys.map(p=>(
+    <mesh key={p.id} position={[0,0,0.0005]}>
+      <shapeGeometry args={[p.shape]}/>
+      <meshBasicMaterial color={p.color} transparent opacity={0.3} side={THREE.DoubleSide}/>
+    </mesh>
+  ))}</group>);
+}
 function MPulse({p}:{p:THREE.Vector3}) {
+
   const r=useRef<THREE.Mesh>(null);
   useFrame(({clock})=>{if(r.current){const s=1+Math.sin(clock.getElapsedTime()*3)*0.3;r.current.scale.set(s,s,1);(r.current.material as THREE.MeshBasicMaterial).opacity=0.6-Math.sin(clock.getElapsedTime()*3)*0.3;}});
   return(<mesh ref={r} position={[p.x,p.y,0.005]}><ringGeometry args={[0.06,0.09,32]}/><meshBasicMaterial color="#ff4081" transparent opacity={0.6} side={THREE.DoubleSide}/></mesh>);
@@ -63,6 +109,7 @@ function WMap({events,onSel,sel}:{events:HistoricalEvent[],onSel:(e:HistoricalEv
   return(<group>
     <mesh><planeGeometry args={[MW,MH]}/><meshStandardMaterial map={cm} roughness={0.8} metalness={0} side={THREE.DoubleSide}/></mesh>
     <Grid/>
+    <EmpiresLayer year={sel?.year}/>
     <lineLoop><bufferGeometry attach="geometry" {...new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-MW/2,-MH/2,0.001),new THREE.Vector3(MW/2,-MH/2,0.001),new THREE.Vector3(MW/2,MH/2,0.001),new THREE.Vector3(-MW/2,MH/2,0.001)])}/><lineBasicMaterial attach="material" color="#61dafb" transparent opacity={0.3}/></lineLoop>
     {events.map(ev=><Marker key={ev.id} event={ev} onClick={()=>onSel(ev)}/>)}
     <BLines sel={sel}/>
