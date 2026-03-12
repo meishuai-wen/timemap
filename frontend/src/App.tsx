@@ -3,7 +3,8 @@ import { Stars, OrbitControls, useTexture, Html } from "@react-three/drei";
 import { useRef, Suspense, useState } from "react";
 import * as THREE from "three";
 import "./App.css";
-import { mockEvents, HistoricalEvent } from "./data/mockEvents";
+import type { HistoricalEvent } from "./data/mockEvents";
+import { mockEvents } from "./data/mockEvents";
 
 function latLongToVector3(lat: number, lon: number, radius: number): THREE.Vector3 {
   const phi = (90 - lat) * (Math.PI / 180);
