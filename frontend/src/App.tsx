@@ -5,6 +5,7 @@ import * as THREE from "three";
 import "./App.css";
 import { daySlices, getSliceByDate, searchAllEvents } from "./data/mockEvents";
 import type { HistoricalEvent } from "./data/mockEvents";
+import CivilizationXRay from "./components/CivilizationXRay";
 const MW = 10, MH = 5;
 function ltp(lat: number, lng: number) { return new THREE.Vector3((lng/180)*(MW/2),(lat/90)*(MH/2),0.01); }
 function ButterflyArc({s,e}:{s:THREE.Vector3;e:THREE.Vector3}) {
@@ -34,7 +35,7 @@ function BLines({sel}:{sel:HistoricalEvent|null}) {
   const arcs = useMemo(()=>{if(!sel?.relatedEventIds?.length)return[];const sp=ltp(sel.lat,sel.lng);const r:{s:THREE.Vector3;e:THREE.Vector3;id:string}[]=[];sel.relatedEventIds.forEach(id=>{for(const sl of daySlices){const f=sl.events.find(x=>x.id===id);if(f){r.push({s:sp,e:ltp(f.lat,f.lng),id});break;}}});return r;},[sel]);
   return(<group>{arcs.map(a=><ButterflyArc key={a.id} s={a.s} e={a.e}/>)}</group>);
 }
-function EmpiresLayer({year}:{year:number|undefined}) {
+function EmpiresLayer({year, onSelectEmpire}:{year:number|undefined, onSelectEmpire:(id:string)=>void}) {
   const polys = useMemo(()=>{
     if(!year) return [];
     const res = [];
@@ -57,7 +58,7 @@ function EmpiresLayer({year}:{year:number|undefined}) {
     return res;
   },[year]);
   return(<group>{polys.map(p=>(
-    <mesh key={p.id} position={[0,0,0.0005]}>
+    <mesh key={p.id} position={[0,0,0.0005]} onClick={(e) => { e.stopPropagation(); onSelectEmpire(p.id); }}>
       <shapeGeometry args={[p.shape]}/>
       <meshBasicMaterial color={p.color} transparent opacity={0.3} side={THREE.DoubleSide}/>
     </mesh>
@@ -104,12 +105,12 @@ function Grid() {
     <line><bufferGeometry attach="geometry" {...new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,-MH/2,0.003),new THREE.Vector3(0,MH/2,0.003)])}/><lineBasicMaterial attach="material" color="#61dafb" transparent opacity={0.3}/></line>
   </group>);
 }
-function WMap({events,onSel,sel}:{events:HistoricalEvent[],onSel:(e:HistoricalEvent)=>void,sel:HistoricalEvent|null}) {
+function WMap({events,onSel,sel,onSelectEmpire}:{events:HistoricalEvent[],onSel:(e:HistoricalEvent)=>void,sel:HistoricalEvent|null,onSelectEmpire:(id:string)=>void}) {
   const[cm]=useTexture(['https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Equirectangular-projection.jpg/1280px-Equirectangular-projection.jpg']);
   return(<group>
-    <mesh><planeGeometry args={[MW,MH]}/><meshStandardMaterial map={cm} roughness={0.8} metalness={0} side={THREE.DoubleSide}/></mesh>
+    <mesh onPointerMissed={() => onSelectEmpire('')}><planeGeometry args={[MW,MH]}/><meshStandardMaterial map={cm} roughness={0.8} metalness={0} side={THREE.DoubleSide}/></mesh>
     <Grid/>
-    <EmpiresLayer year={sel?.year}/>
+    <EmpiresLayer year={sel?.year} onSelectEmpire={onSelectEmpire} />
     <lineLoop><bufferGeometry attach="geometry" {...new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-MW/2,-MH/2,0.001),new THREE.Vector3(MW/2,-MH/2,0.001),new THREE.Vector3(MW/2,MH/2,0.001),new THREE.Vector3(-MW/2,MH/2,0.001)])}/><lineBasicMaterial attach="material" color="#61dafb" transparent opacity={0.3}/></lineLoop>
     {events.map(ev=><Marker key={ev.id} event={ev} onClick={()=>onSel(ev)}/>)}
     <BLines sel={sel}/>
@@ -119,6 +120,7 @@ function App() {
   const t=new Date();const[mo,setMo]=useState(t.getMonth()+1);const[dy,setDy]=useState(t.getDate());
   const[di,setDi]=useState(`${t.getMonth()+1}月${t.getDate()}日`);const[sel,setSel]=useState<HistoricalEvent|null>(null);
   const[fl,setFl]=useState(false);const[sq,setSq]=useState("");const[sr,setSr]=useState<HistoricalEvent[]>([]);
+  const[selEmp,setSelEmp]=useState<'qin'|'rome'|null>(null);
   const cs=getSliceByDate(mo,dy);const evs=cs?.events||[];
   const ad=daySlices.map(s=>({m:s.month,d:s.day,c:s.events.length}));
   const submit=()=>{const i=di.trim();let m=0,d=0;
@@ -139,10 +141,11 @@ function App() {
         <Canvas orthographic camera={{position:[0,0,10],zoom:120,near:0.1,far:100}}>
           <ambientLight intensity={2}/><pointLight position={[0,0,10]} intensity={1}/>
           <Stars radius={100} depth={50} count={fl?10000:3000} factor={4} saturation={0} fade speed={fl?3:1}/>
-          <Suspense fallback={null}><WMap events={evs} onSel={setSel} sel={sel}/></Suspense>
+          <Suspense fallback={null}><WMap events={evs} onSel={setSel} sel={sel} onSelectEmpire={(id)=>{if(id==="qin"||id==="rome")setSelEmp(id);else setSelEmp(null);}}/></Suspense>
           <CamCtrl/>
         </Canvas>
       </div>
+      <CivilizationXRay selectedId={selEmp} onClose={()=>setSelEmp(null)} />
       <div className="ui-overlay">
         <div className="sidebar glass-panel" style={{display:'flex',flexDirection:'column',gap:'16px'}}>
           <div><h2 style={{margin:'0 0 8px 0',fontSize:'20px'}}>📅 历史上的今天</h2>
