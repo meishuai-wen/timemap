@@ -1,4 +1,4 @@
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Stars, OrbitControls, useTexture, Html } from "@react-three/drei";
 import { useRef, Suspense, useState } from "react";
 import * as THREE from "three";
@@ -47,13 +47,20 @@ function Marker({ event, onClick }: { event: HistoricalEvent; onClick: () => voi
   );
 }
 
-function Earth({ events, onSelectEvent }: { events: HistoricalEvent[], onSelectEvent: (e: HistoricalEvent) => void }) {
+function Earth({ events, onSelectEvent, selectedEvent }: { events: HistoricalEvent[], onSelectEvent: (e: HistoricalEvent) => void, selectedEvent: HistoricalEvent | null }) {
   const earthRef = useRef<THREE.Group>(null);
   const [colorMap] = useTexture(['https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg']);
+  const { camera } = useThree();
 
   useFrame(() => {
-    if (earthRef.current) {
+    if (!earthRef.current) return;
+    if (!selectedEvent) {
       earthRef.current.rotation.y += 0.001;
+    } else {
+      const localPos = latLongToVector3(selectedEvent.lat, selectedEvent.lng, 1).normalize();
+      const cameraDir = camera.position.clone().normalize();
+      const targetQuat = new THREE.Quaternion().setFromUnitVectors(localPos, cameraDir);
+      earthRef.current.quaternion.slerp(targetQuat, 0.05);
     }
   });
 
@@ -74,6 +81,8 @@ function App() {
   const [selectedYear, setSelectedYear] = useState<number>(epochSlices[0].year);
   const [selectedEvent, setSelectedEvent] = useState<HistoricalEvent | null>(null);
   const [flash, setFlash] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<HistoricalEvent[]>([]);
 
   const currentSlice = epochSlices.find(s => s.year === selectedYear) || epochSlices[0];
 
@@ -82,6 +91,33 @@ function App() {
     setSelectedEvent(null);
     setFlash(true);
     setTimeout(() => setFlash(false), 500);
+  };
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    const results = epochSlices.flatMap(s => s.events).filter(ev => 
+      ev.title.includes(query) || 
+      ev.description.includes(query) || 
+      ev.region.includes(query)
+    );
+    setSearchResults(results);
+  };
+
+  const handleSelectSearchResult = (ev: HistoricalEvent) => {
+    const slice = epochSlices.find(s => s.events.some(e => e.id === ev.id));
+    if (slice && slice.year !== selectedYear) {
+      setSelectedYear(slice.year);
+      setFlash(true);
+      setTimeout(() => setFlash(false), 500);
+    }
+    setSelectedEvent(ev);
+    setSearchResults([]);
+    setSearchQuery('');
   };
 
   return (
@@ -98,7 +134,7 @@ function App() {
           <pointLight position={[10, 10, 10]} intensity={2} />
           <Stars radius={100} depth={50} count={flash ? 10000 : 5000} factor={4} saturation={0} fade speed={flash ? 3 : 1} />
           <Suspense fallback={null}>
-            <Earth events={currentSlice.events} onSelectEvent={setSelectedEvent} />
+            <Earth events={currentSlice.events} onSelectEvent={setSelectedEvent} selectedEvent={selectedEvent} />
           </Suspense>
           <OrbitControls enableZoom={true} enablePan={false} />
         </Canvas>
@@ -106,6 +142,63 @@ function App() {
 
       <div className="ui-overlay">
         <div className="sidebar glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* 搜索框 UI */}
+          <div className="search-container" style={{ position: 'relative', width: '100%' }}>
+            <input 
+              type="text" 
+              value={searchQuery}
+              onChange={handleSearch}
+              placeholder="全局搜索历史事件（如：罗马、秦）..."
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                borderRadius: '8px',
+                border: '1px solid rgba(255,255,255,0.3)',
+                color: 'white',
+                background: 'rgba(20, 20, 20, 0.6)',
+                outline: 'none',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+            {searchResults.length > 0 && (
+              <ul className="search-results glass-panel" style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                width: '100%',
+                listStyle: 'none',
+                padding: '10px 0',
+                margin: '10px 0 0 0',
+                background: 'rgba(20, 20, 20, 0.9)',
+                backdropFilter: 'blur(10px)',
+                borderRadius: '8px',
+                border: '1px solid rgba(255,255,255,0.2)',
+                maxHeight: '300px',
+                overflowY: 'auto',
+                zIndex: 1000
+              }}>
+                {searchResults.map(ev => (
+                  <li 
+                    key={`search-${ev.id}`}
+                    onClick={() => handleSelectSearchResult(ev)}
+                    style={{
+                      padding: '10px 16px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid rgba(255,255,255,0.1)',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{ color: '#61dafb', fontWeight: 'bold', fontSize: '14px' }}>{ev.title}</div>
+                    <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>{ev.region}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           <div className="theme-summary">
             <h2 style={{ margin: '0 0 10px 0', fontSize: '24px' }}>
               {currentSlice.year > 0 ? `公元 ${currentSlice.year} 年` : `公元前 ${Math.abs(currentSlice.year)} 年`}
