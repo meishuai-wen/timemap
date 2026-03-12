@@ -51,15 +51,16 @@ function App() {
       <div className="ui-overlay">
         {/* Sidebar Info Panel */}
         <div className="sidebar glass-panel">
-          <h2>TimeMap</h2>
-          <p>Explore the timeline of the universe and human history.</p>
+          <h2>时空纪元 (TimeMap)</h2>
+          <p>以前所未有的“上帝视角”，探索人类历史的共时性发展。</p>
           <ul className="info-list">
-            <li>Big Bang</li>
-            <li>Formation of Earth</li>
-            <li>First Life</li>
-            <li>Dinosaurs</li>
-            <li>Human Era</li>
+            <li>文明起源</li>
+            <li>轴心时代</li>
+            <li>大航海时代</li>
+            <li>工业革命</li>
+            <li>信息纪元</li>
           </ul>
+          <button className="glass-btn">开始探索</button>
         </div>
 
         {/* Bottom Timeline */}
@@ -71,9 +72,9 @@ function App() {
             <div className="timeline-marker" style={{ left: "80%" }}></div>
           </div>
           <div className="timeline-labels">
-            <span>Past</span>
-            <span>Present</span>
-            <span>Future</span>
+            <span>过去 (Past)</span>
+            <span>现在 (Present)</span>
+            <span>未来 (Future)</span>
           </div>
         </div>
       </div>
