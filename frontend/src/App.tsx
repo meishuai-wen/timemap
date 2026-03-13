@@ -1,4 +1,4 @@
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+﻿import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Stars, useTexture, Html } from "@react-three/drei";
 import { useRef, Suspense, useState, useMemo, useEffect } from "react";
 import * as THREE from "three";
@@ -203,7 +203,7 @@ function App() {
       </div>
       <CivilizationXRay selectedId={selEmp} onClose={()=>setSelEmp(null)} />
       <div className="ui-overlay">
-        <div style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 100 }}>
+        <div style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 10, pointerEvents: 'auto' }}>
           <button 
             onClick={() => setSelEmp('qin')}
             style={{ 
