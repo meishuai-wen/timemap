@@ -3,12 +3,13 @@ import { Stars, useTexture, Html } from "@react-three/drei";
 import { useRef, Suspense, useState, useMemo, useEffect } from "react";
 import * as THREE from "three";
 import "./App.css";
-import { daySlices, getSliceByDate, searchAllEvents } from "./data/mockEvents";
+import { eventsDatabase, getEventsByDate, searchEventsDatabase } from "./data/eventsDatabase";
 import type { HistoricalEvent } from "./data/mockEvents";
 import CivilizationXRay from "./components/CivilizationXRay";
-import march13Events from "./data/march13Events.json";
+
 const MW = 10, MH = 5;
 function ltp(lat: number, lng: number) { return new THREE.Vector3((lng/180)*(MW/2),(lat/90)*(MH/2),0.01); }
+
 function ButterflyArc({s,e}:{s:THREE.Vector3;e:THREE.Vector3}) {
   const geom = useMemo(()=>{
     const dx = e.x - s.x; const dy = e.y - s.y; const dist = Math.sqrt(dx*dx + dy*dy);
@@ -32,16 +33,28 @@ function ButterflyArc({s,e}:{s:THREE.Vector3;e:THREE.Vector3}) {
     <mesh ref={r} position={s}><sphereGeometry args={[0.03,16,16]}/><meshBasicMaterial color="#fff"/><pointLight color="#00ffff" intensity={2} distance={1}/></mesh>
   </group>);
 }
+
 function BLines({sel}:{sel:HistoricalEvent|null}) {
-  const arcs = useMemo(()=>{if(!sel?.relatedEventIds?.length)return[];const sp=ltp(sel.lat,sel.lng);const r:{s:THREE.Vector3;e:THREE.Vector3;id:string}[]=[];sel.relatedEventIds.forEach(id=>{for(const sl of daySlices){const f=sl.events.find(x=>x.id===id);if(f){r.push({s:sp,e:ltp(f.lat,f.lng),id});break;}}});return r;},[sel]);
+  const arcs = useMemo(()=>{
+    if(!sel?.relatedEventIds?.length) return[];
+    const sp=ltp(sel.lat,sel.lng);
+    const r:{s:THREE.Vector3;e:THREE.Vector3;id:string}[]=[];
+    sel.relatedEventIds.forEach(id=>{
+      for(const events of Object.values(eventsDatabase)) {
+        const f = events.find(x => x.id === id);
+        if(f){ r.push({s:sp,e:ltp(f.lat,f.lng),id}); break; }
+      }
+    });
+    return r;
+  },[sel]);
   return(<group>{arcs.map(a=><ButterflyArc key={a.id} s={a.s} e={a.e}/>)}</group>);
 }
+
 function EmpiresLayer({year, onSelectEmpire}:{year:number|undefined, onSelectEmpire:(id:string)=>void}) {
   const polys = useMemo(()=>{
     if(!year) return [];
     const res = [];
     if(year >= -221 && year <= -206) {
-      // Qin
       const qinPts = [[100,20], [120,20], [120,40], [105,45], [95,35]].map(p=>ltp(p[1],p[0]));
       const shape = new THREE.Shape();
       shape.moveTo(qinPts[0].x, qinPts[0].y);
@@ -49,7 +62,6 @@ function EmpiresLayer({year, onSelectEmpire}:{year:number|undefined, onSelectEmp
       res.push({id:'qin', color:'#000000', shape});
     }
     if(year >= -27 && year <= 395) {
-      // Rome
       const romePts = [[-10,30], [40,30], [40,45], [10,50], [-10,40]].map(p=>ltp(p[1],p[0]));
       const shape = new THREE.Shape();
       shape.moveTo(romePts[0].x, romePts[0].y);
@@ -65,12 +77,19 @@ function EmpiresLayer({year, onSelectEmpire}:{year:number|undefined, onSelectEmp
     </mesh>
   ))}</group>);
 }
-function MPulse({p}:{p:THREE.Vector3}) {
 
+function MPulse({p}:{p:THREE.Vector3}) {
   const r=useRef<THREE.Mesh>(null);
-  useFrame(({clock})=>{if(r.current){const s=1+Math.sin(clock.getElapsedTime()*3)*0.3;r.current.scale.set(s,s,1);(r.current.material as THREE.MeshBasicMaterial).opacity=0.6-Math.sin(clock.getElapsedTime()*3)*0.3;}});
+  useFrame(({clock})=>{
+    if(r.current){
+      const s=1+Math.sin(clock.getElapsedTime()*3)*0.3;
+      r.current.scale.set(s,s,1);
+      (r.current.material as THREE.MeshBasicMaterial).opacity=0.6-Math.sin(clock.getElapsedTime()*3)*0.3;
+    }
+  });
   return(<mesh ref={r} position={[p.x,p.y,0.005]}><ringGeometry args={[0.06,0.09,32]}/><meshBasicMaterial color="#ff4081" transparent opacity={0.6} side={THREE.DoubleSide}/></mesh>);
 }
+
 function Marker({event,onClick}:{event:HistoricalEvent;onClick:()=>void}) {
   const p=ltp(event.lat,event.lng);
   return(<group>
@@ -85,6 +104,7 @@ function Marker({event,onClick}:{event:HistoricalEvent;onClick:()=>void}) {
     </Html>
   </group>);
 }
+
 function CamCtrl() {
   const{camera,gl}=useThree();const dr=useRef(false);const lm=useRef({x:0,y:0});
   useEffect(()=>{const d=gl.domElement;
@@ -96,6 +116,7 @@ function CamCtrl() {
     return()=>{d.removeEventListener('wheel',wh);d.removeEventListener('pointerdown',dn);d.removeEventListener('pointermove',mv);d.removeEventListener('pointerup',up);};
   },[camera,gl]);return null;
 }
+
 function Grid() {
   const lines=useMemo(()=>{const p:THREE.Vector3[][]=[];const z=0.002;
     for(let g=-180;g<=180;g+=30){const x=(g/180)*(MW/2);p.push([new THREE.Vector3(x,-MH/2,z),new THREE.Vector3(x,MH/2,z)]);}
@@ -106,6 +127,7 @@ function Grid() {
     <line><bufferGeometry attach="geometry" {...new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,-MH/2,0.003),new THREE.Vector3(0,MH/2,0.003)])}/><lineBasicMaterial attach="material" color="#61dafb" transparent opacity={0.3}/></line>
   </group>);
 }
+
 function WMap({events,onSel,sel,onSelectEmpire}:{events:HistoricalEvent[],onSel:(e:HistoricalEvent)=>void,sel:HistoricalEvent|null,onSelectEmpire:(id:string)=>void}) {
   const[cm]=useTexture(['https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Equirectangular-projection.jpg/1280px-Equirectangular-projection.jpg']);
   return(<group>
@@ -117,41 +139,60 @@ function WMap({events,onSel,sel,onSelectEmpire}:{events:HistoricalEvent[],onSel:
     <BLines sel={sel}/>
   </group>);
 }
+
+const MONTHS = Array.from({length: 12}, (_, i) => i + 1);
+const getDaysInMonth = (month: number) => {
+  if (month === 2) return 29; // Allow 29 for Feb
+  if ([4,6,9,11].includes(month)) return 30;
+  return 31;
+};
+
 function App() {
-  const t=new Date();const[mo,setMo]=useState(t.getMonth()+1);const[dy,setDy]=useState(t.getDate());
-  const[di,setDi]=useState(`${t.getMonth()+1}月${t.getDate()}日`);const[sel,setSel]=useState<HistoricalEvent|null>(null);
-  const[fl,setFl]=useState(false);const[sq,setSq]=useState("");const[sr,setSr]=useState<HistoricalEvent[]>([]);
-  const[selEmp,setSelEmp]=useState<'qin'|'rome'|null>(null);
-  let cs: any = getSliceByDate(mo,dy);
-  let evs: HistoricalEvent[] = cs?.events||[];
-  if (mo === 3 && dy === 13) {
-    evs = march13Events.map((ev: any, i: number) => ({
-      id: 'm13-' + i,
-      title: ev.title || '未知事件',
-      year: parseInt(ev.year) || 0,
-      description: ev.description || '',
-      lat: parseFloat(ev.lat) || 0,
-      lng: parseFloat(ev.lng) || 0,
-      region: ev.region || 'Global',
-      relatedEventIds: []
-    }));
-    cs = { month: 3, day: 13, events: evs };
-  }
-  const ad=daySlices.map(s=>({m:s.month,d:s.day,c:s.events.length}));
-  const submit=()=>{const i=di.trim();let m=0,d=0;
-    const a=i.match(/^(\d{1,2})\s*月\s*(\d{1,2})\s*日?$/),b=i.match(/^(\d{1,2})[\/\-](\d{1,2})$/),c=i.match(/^(\d{2})(\d{2})$/);
-    if(a){m=+a[1];d=+a[2];}else if(b){m=+b[1];d=+b[2];}else if(c){m=+c[1];d=+c[2];}
-    if(m>=1&&m<=12&&d>=1&&d<=31){setMo(m);setDy(d);setSel(null);setFl(true);setTimeout(()=>setFl(false),500);}};
-  const qd=(m:number,d:number)=>{setMo(m);setDy(d);setDi(`${m}月${d}日`);setSel(null);setFl(true);setTimeout(()=>setFl(false),500);};
-  const hs=(e:React.ChangeEvent<HTMLInputElement>)=>{const q=e.target.value;setSq(q);if(!q.trim()){setSr([]);return;}
-    const dm=q.match(/^(\d{1,2})\s*月\s*(\d{1,2})\s*日?$/)||q.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
-    if(dm){const s=getSliceByDate(+dm[1],+dm[2]);if(s){setSr(s.events);return;}}setSr(searchAllEvents(q));};
-  const hsr=(ev:HistoricalEvent)=>{for(const s of daySlices){if(s.events.find(e=>e.id===ev.id)){
-    if(s.month!==mo||s.day!==dy){setMo(s.month);setDy(s.day);setDi(`${s.month}月${s.day}日`);setFl(true);setTimeout(()=>setFl(false),500);}break;}}
-    setSel(ev);setSr([]);setSq('');};
-  return(
+  const t = new Date();
+  const [mo, setMo] = useState(t.getMonth() + 1);
+  const [dy, setDy] = useState(t.getDate());
+  const [sel, setSel] = useState<HistoricalEvent|null>(null);
+  const [fl, setFl] = useState(false);
+  const [sq, setSq] = useState("");
+  const [sr, setSr] = useState<HistoricalEvent[]>([]);
+  const [selEmp, setSelEmp] = useState<'qin'|'rome'|null>(null);
+
+  const dateKey = `${mo.toString().padStart(2, '0')}-${dy.toString().padStart(2, '0')}`;
+  const evs: HistoricalEvent[] = getEventsByDate(dateKey);
+
+  const availableDates = Object.keys(eventsDatabase).map(key => {
+    const [m, d] = key.split('-');
+    return { m: parseInt(m, 10), d: parseInt(d, 10), c: eventsDatabase[key].length };
+  });
+
+  const qd = (m: number, d: number) => {
+    setMo(m); setDy(d); setSel(null); setFl(true); setTimeout(() => setFl(false), 500);
+  };
+
+  const hs = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const q = e.target.value; setSq(q);
+    if (!q.trim()) { setSr([]); return; }
+    setSr(searchEventsDatabase(q));
+  };
+
+  const hsr = (ev: HistoricalEvent) => {
+    for (const [key, events] of Object.entries(eventsDatabase)) {
+      if (events.find(e => e.id === ev.id)) {
+        const [mStr, dStr] = key.split('-');
+        const m = parseInt(mStr, 10);
+        const d = parseInt(dStr, 10);
+        if (m !== mo || d !== dy) {
+          setMo(m); setDy(d); setFl(true); setTimeout(() => setFl(false), 500);
+        }
+        break;
+      }
+    }
+    setSel(ev); setSr([]); setSq('');
+  };
+
+  return (
     <div className="app-container">
-      {fl&&<div style={{position:'absolute',top:0,left:0,right:0,bottom:0,backgroundColor:'rgba(255,255,255,0.3)',pointerEvents:'none',zIndex:100}}/>}
+      {fl && <div style={{position:'absolute',top:0,left:0,right:0,bottom:0,backgroundColor:'rgba(255,255,255,0.3)',pointerEvents:'none',zIndex:100}}/>}
       <div className="canvas-container">
         <Canvas orthographic camera={{position:[0,0,10],zoom:120,near:0.1,far:100}}>
           <ambientLight intensity={2}/><pointLight position={[0,0,10]} intensity={1}/>
@@ -163,48 +204,68 @@ function App() {
       <CivilizationXRay selectedId={selEmp} onClose={()=>setSelEmp(null)} />
       <div className="ui-overlay">
         <div className="sidebar glass-panel" style={{display:'flex',flexDirection:'column',gap:'16px'}}>
-          <div><h2 style={{margin:'0 0 8px 0',fontSize:'20px'}}>📅 历史上的今天</h2>
-            <div style={{display:'flex',gap:'8px'}}>
-              <input type="text" value={di} onChange={e=>setDi(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submit()}} placeholder="输入日期，如：3月11日" style={{flex:1,padding:'10px 14px',borderRadius:'8px',border:'1px solid rgba(255,255,255,0.3)',color:'white',background:'rgba(20,20,20,0.6)',outline:'none',fontSize:'14px'}}/>
-              <button onClick={submit} style={{padding:'10px 16px',borderRadius:'8px',border:'1px solid rgba(97,218,251,0.5)',background:'rgba(97,218,251,0.2)',color:'white',cursor:'pointer',fontSize:'14px'}}>查询</button>
+          
+          <div style={{ textAlign: 'center', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+            <h2 style={{margin:'0 0 12px 0',fontSize:'20px',color:'#61dafb',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>
+              <span role="img" aria-label="calendar">📅</span> 历史上的今天
+            </h2>
+            <div style={{display:'flex', gap:'8px', justifyContent:'center', alignItems:'center'}}>
+              <select value={mo} onChange={(e) => {
+                const newMo = parseInt(e.target.value, 10);
+                setMo(newMo);
+                const maxDays = getDaysInMonth(newMo);
+                if (dy > maxDays) setDy(maxDays);
+                setSel(null);
+              }} style={{padding:'8px 12px', borderRadius:'6px', background:'rgba(20,20,20,0.8)', color:'white', border:'1px solid rgba(255,255,255,0.3)', outline:'none', cursor:'pointer'}}>
+                {MONTHS.map(m => <option key={m} value={m}>{m} 月</option>)}
+              </select>
+              <select value={dy} onChange={(e) => {
+                setDy(parseInt(e.target.value, 10));
+                setSel(null);
+              }} style={{padding:'8px 12px', borderRadius:'6px', background:'rgba(20,20,20,0.8)', color:'white', border:'1px solid rgba(255,255,255,0.3)', outline:'none', cursor:'pointer'}}>
+                {Array.from({length: getDaysInMonth(mo)}, (_, i) => i + 1).map(d => <option key={d} value={d}>{d} 日</option>)}
+              </select>
             </div>
-            <div style={{fontSize:'11px',color:'#888',marginTop:'4px'}}>支持格式：3月11日、3/11、3-11、0311</div>
+            <div style={{fontSize:'12px',color:'#aaa',marginTop:'8px'}}>{evs.length > 0 ? `共 ${evs.length} 件历史大事` : '暂无该日期的历史数据'}</div>
           </div>
+
           <div style={{position:'relative'}}>
-            <input type="text" value={sq} onChange={hs} placeholder="搜索事件（关键词或日期）..." style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:'1px solid rgba(255,255,255,0.3)',color:'white',background:'rgba(20,20,20,0.6)',outline:'none',fontSize:'14px',boxSizing:'border-box'}}/>
+            <input type="text" value={sq} onChange={hs} placeholder="搜索事件（关键词或年份）..." style={{width:'100%',padding:'10px 14px',borderRadius:'8px',border:'1px solid rgba(255,255,255,0.3)',color:'white',background:'rgba(20,20,20,0.6)',outline:'none',fontSize:'14px',boxSizing:'border-box'}}/>
             {sr.length>0&&(<ul style={{position:'absolute',top:'100%',left:0,width:'100%',listStyle:'none',padding:'8px 0',margin:'6px 0 0 0',background:'rgba(20,20,20,0.95)',backdropFilter:'blur(10px)',borderRadius:'8px',border:'1px solid rgba(255,255,255,0.2)',maxHeight:'250px',overflowY:'auto',zIndex:1000}}>
               {sr.map(ev=>(<li key={`s-${ev.id}`} onClick={()=>hsr(ev)} style={{padding:'8px 14px',cursor:'pointer',borderBottom:'1px solid rgba(255,255,255,0.08)',transition:'background 0.2s'}} onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.1)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                 <div style={{color:'#61dafb',fontWeight:'bold',fontSize:'13px'}}>{ev.title}</div>
                 <div style={{fontSize:'11px',color:'#aaa',marginTop:'2px'}}>{ev.year>0?`公元${ev.year}年`:`公元前${Math.abs(ev.year)}年`} · {ev.region}</div>
               </li>))}</ul>)}
           </div>
-          <div style={{textAlign:'center',padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,0.15)'}}>
-            <div style={{fontSize:'28px',fontWeight:'bold',color:'#61dafb'}}>{mo}月{dy}日</div>
-            <div style={{fontSize:'12px',color:'#888',marginTop:'4px'}}>{cs?`共 ${evs.length} 件历史大事`:'暂无该日期的历史数据'}</div>
-          </div>
-          <div style={{flex:1,overflowY:'auto'}}>
+          
+          <div style={{flex:1,overflowY:'auto', paddingRight:'4px'}}>
             {evs.length>0?(<ul style={{listStyle:'none',padding:0,margin:0}}>{evs.map(ev=>(
-              <li key={ev.id} onClick={()=>setSel(ev)} style={{cursor:'pointer',padding:'10px',marginBottom:'8px',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'6px',backgroundColor:sel?.id===ev.id?'rgba(97,218,251,0.15)':'transparent',transition:'all 0.2s'}}>
-                <div style={{fontWeight:'bold',fontSize:'14px'}}>{ev.title}</div>
-                <div style={{fontSize:'12px',color:'#ffb300',marginTop:'2px'}}>{ev.year>0?`公元 ${ev.year} 年`:`公元前 ${Math.abs(ev.year)} 年`}</div>
-                <div style={{fontSize:'11px',color:'#999',marginTop:'2px'}}>{ev.region}</div>
-              </li>))}</ul>):(<div style={{textAlign:'center',color:'#666',padding:'30px 0',fontSize:'14px'}}>📭 该日期暂无数据<br/><span style={{fontSize:'12px'}}>试试其他日期吧</span></div>)}
+              <li key={ev.id} onClick={()=>setSel(ev)} style={{cursor:'pointer',padding:'12px',marginBottom:'10px',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'8px',backgroundColor:sel?.id===ev.id?'rgba(97,218,251,0.2)':'rgba(0,0,0,0.2)',transition:'all 0.2s',boxShadow:sel?.id===ev.id?'0 0 10px rgba(97,218,251,0.2)':'none'}}>
+                <div style={{fontWeight:'bold',fontSize:'15px',color:sel?.id===ev.id?'#fff':'#e0e0e0'}}>{ev.title}</div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'6px'}}>
+                  <div style={{fontSize:'13px',color:'#ffb300',fontWeight:'500'}}>{ev.year>0?`公元 ${ev.year} 年`:`公元前 ${Math.abs(ev.year)} 年`}</div>
+                  <div style={{fontSize:'12px',color:'#999',background:'rgba(255,255,255,0.1)',padding:'2px 6px',borderRadius:'4px'}}>{ev.region}</div>
+                </div>
+              </li>))}</ul>):(<div style={{textAlign:'center',color:'#666',padding:'40px 0',fontSize:'14px'}}>📭 史海茫茫<br/><span style={{fontSize:'12px'}}>这一天似乎很平静...</span></div>)}
           </div>
-          {sel&&(<div style={{borderTop:'1px solid rgba(255,255,255,0.2)',paddingTop:'12px'}}>
-            <h3 style={{margin:'0 0 6px 0',color:'#61dafb',fontSize:'16px'}}>{sel.title}</h3>
-            <div style={{fontSize:'13px',color:'#ffb300',marginBottom:'6px'}}>{sel.year>0?`公元 ${sel.year} 年`:`公元前 ${Math.abs(sel.year)} 年`} · {sel.region}</div>
-            <p style={{fontSize:'13px',lineHeight:'1.6',margin:0,color:'rgba(255,255,255,0.85)'}}>{sel.description}</p>
+          
+          {sel&&(<div style={{borderTop:'1px solid rgba(255,255,255,0.2)',paddingTop:'16px',marginTop:'auto'}}>
+            <h3 style={{margin:'0 0 8px 0',color:'#61dafb',fontSize:'18px'}}>{sel.title}</h3>
+            <div style={{fontSize:'13px',color:'#ffb300',marginBottom:'10px',fontWeight:'500'}}>{sel.year>0?`公元 ${sel.year} 年`:`公元前 ${Math.abs(sel.year)} 年`} · {sel.region}</div>
+            <p style={{fontSize:'14px',lineHeight:'1.6',margin:0,color:'rgba(255,255,255,0.9)',textAlign:'justify'}}>{sel.description}</p>
           </div>)}
         </div>
+        
         <div className="timeline-container glass-panel">
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',width:'100%',padding:'0 16px'}}>
-            <span style={{fontSize:'12px',color:'#888'}}>快捷日期：</span>
-            <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
-              {ad.map(({m,d,c})=>(<div key={`${m}-${d}`} onClick={()=>qd(m,d)} style={{cursor:'pointer',padding:'4px 12px',borderRadius:'16px',fontSize:'13px',backgroundColor:m===mo&&d===dy?'rgba(97,218,251,0.3)':'transparent',border:m===mo&&d===dy?'1px solid #61dafb':'1px solid rgba(255,255,255,0.2)',transition:'all 0.3s',whiteSpace:'nowrap'}}>{m}月{d}日 <span style={{fontSize:'10px',color:'#888'}}>({c})</span></div>))}
+            <span style={{fontSize:'13px',color:'#aaa',fontWeight:'bold'}}>数据档案库：</span>
+            <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
+              {availableDates.map(({m,d,c})=>(<div key={`${m}-${d}`} onClick={()=>qd(m,d)} style={{cursor:'pointer',padding:'6px 14px',borderRadius:'20px',fontSize:'13px',fontWeight:'500',backgroundColor:m===mo&&d===dy?'rgba(97,218,251,0.3)':'rgba(0,0,0,0.3)',border:m===mo&&d===dy?'1px solid #61dafb':'1px solid rgba(255,255,255,0.1)',transition:'all 0.2s',whiteSpace:'nowrap',boxShadow:m===mo&&d===dy?'0 0 8px rgba(97,218,251,0.3)':'none'}}>{m}月{d}日 <span style={{fontSize:'11px',color:m===mo&&d===dy?'#fff':'#888'}}>({c})</span></div>))}
             </div>
           </div>
         </div>
       </div>
-    </div>);
+    </div>
+  );
 }
 export default App;
