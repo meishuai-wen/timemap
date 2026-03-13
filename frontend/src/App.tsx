@@ -6,6 +6,7 @@ import "./App.css";
 import { daySlices, getSliceByDate, searchAllEvents } from "./data/mockEvents";
 import type { HistoricalEvent } from "./data/mockEvents";
 import CivilizationXRay from "./components/CivilizationXRay";
+import march13Events from "./data/march13Events.json";
 const MW = 10, MH = 5;
 function ltp(lat: number, lng: number) { return new THREE.Vector3((lng/180)*(MW/2),(lat/90)*(MH/2),0.01); }
 function ButterflyArc({s,e}:{s:THREE.Vector3;e:THREE.Vector3}) {
@@ -121,7 +122,21 @@ function App() {
   const[di,setDi]=useState(`${t.getMonth()+1}月${t.getDate()}日`);const[sel,setSel]=useState<HistoricalEvent|null>(null);
   const[fl,setFl]=useState(false);const[sq,setSq]=useState("");const[sr,setSr]=useState<HistoricalEvent[]>([]);
   const[selEmp,setSelEmp]=useState<'qin'|'rome'|null>(null);
-  const cs=getSliceByDate(mo,dy);const evs=cs?.events||[];
+  let cs: any = getSliceByDate(mo,dy);
+  let evs: HistoricalEvent[] = cs?.events||[];
+  if (mo === 3 && dy === 13) {
+    evs = march13Events.map((ev: any, i: number) => ({
+      id: 'm13-' + i,
+      title: ev.title || '未知事件',
+      year: parseInt(ev.year) || 0,
+      description: ev.description || '',
+      lat: parseFloat(ev.lat) || 0,
+      lng: parseFloat(ev.lng) || 0,
+      region: ev.region || 'Global',
+      relatedEventIds: []
+    }));
+    cs = { month: 3, day: 13, events: evs };
+  }
   const ad=daySlices.map(s=>({m:s.month,d:s.day,c:s.events.length}));
   const submit=()=>{const i=di.trim();let m=0,d=0;
     const a=i.match(/^(\d{1,2})\s*月\s*(\d{1,2})\s*日?$/),b=i.match(/^(\d{1,2})[\/\-](\d{1,2})$/),c=i.match(/^(\d{2})(\d{2})$/);
