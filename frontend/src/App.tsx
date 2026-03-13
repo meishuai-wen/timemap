@@ -203,6 +203,29 @@ function App() {
       </div>
       <CivilizationXRay selectedId={selEmp} onClose={()=>setSelEmp(null)} />
       <div className="ui-overlay">
+        <div style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 100 }}>
+          <button 
+            onClick={() => setSelEmp('qin')}
+            style={{ 
+              padding: '10px 20px', 
+              background: 'linear-gradient(135deg, #38bdf8, #818cf8)', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '8px', 
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              boxShadow: '0 4px 12px rgba(56, 189, 248, 0.4)',
+              transition: 'transform 0.2s, box-shadow 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+            onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+          >
+            <span>⚔️</span> 进入文明透视仪
+          </button>
+        </div>
         <div className="sidebar glass-panel" style={{display:'flex',flexDirection:'column',gap:'16px'}}>
           
           <div style={{ textAlign: 'center', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
